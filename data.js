@@ -198,9 +198,11 @@ class Store {
   // 자동이체가 예정돼 있고 그 돈이 이미 통장에 들어와 있는 금액 (비상금에서 제외)
   pending(acc) {
     const t = today(), baseBudget = budgetOf(this.s.baseDate);
-    return SCHEDULE.filter(it => it.from === acc && !this.s.applied[it.key] && it.date > t)
+    const sum = SCHEDULE.filter(it => it.from === acc && !this.s.applied[it.key] && it.date > t)
       .filter(it => { const b = it.date.slice(0, 7); return b <= baseBudget || this.salaryDone(b); })
       .reduce((s, it) => s + it.amount, 0);
+    // 통장에 실제로 있는 돈보다 많이 잡지 않음 (잔액 0원인데 대기 30만이면 비상금이 마이너스가 되는 문제)
+    return Math.min(sum, Math.max(0, this.balance(acc)));
   }
   nextAuto(acc) {
     return SCHEDULE.find(it => (it.from === acc || it.to === acc) && !this.s.applied[it.key]);
