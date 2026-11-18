@@ -57,7 +57,7 @@ function drawForm() {
   const optional = OPTIONAL_SUBS.includes(fCat);
   if (subs && !subs.includes(fSub)) fSub = optional ? null : subs[0];
   if (!subs) fSub = null;
-  $('#subChips').hidden = !subs;
+  $('#subField').hidden = !subs;
   $('#subChips').innerHTML = subs ? chipsHtml(subs.map(s => [s, s]), fSub, 'sub') : '';
 
   const od = fSign < 0 ? OPTS[fCat] : null;

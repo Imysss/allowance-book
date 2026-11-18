@@ -304,7 +304,7 @@
       <button data-add="1000">+1천</button><button data-add="5000">+5천</button>
       <button data-add="10000">+1만</button><button data-add="50000">+5만</button><button data-add="0">지우기</button>
     </div>
-    <label class="treat" id="giftRow"><input type="checkbox" id="gift"> 🎁 선물받은 기프티콘으로 샀어요 (돈은 안 나가요)</label>
+    <label class="treat" id="giftRow"><input type="checkbox" id="gift"> 🎁 선물받은 기프티콘으로 샀어요</label>
     <div id="accField">
       <div class="field-label" id="accLabel">통장</div>
       <div class="chips" id="accChips"></div>
@@ -320,7 +320,10 @@
     <div id="catField">
       <div class="field-label">분류</div>
       <div class="chips" id="catChips"></div>
-      <div class="chips" id="subChips" style="margin-top:8px" hidden></div>
+      <div id="subField" hidden>
+        <div class="field-label">카테고리</div>
+        <div class="chips" id="subChips"></div>
+      </div>
       <div id="optField" hidden>
         <div class="field-label" id="optLabel"></div>
         <div class="chips" id="optChips"></div>
