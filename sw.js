@@ -1,6 +1,6 @@
 // 오프라인 캐시 서비스 워커 — 파일을 고치면 VERSION을 올려야 폰에 새 버전이 반영됨
-const VERSION = 'v42';
-const FILES = ['./', 'index.html', 'history.js', 'data.js', 'chart.js', 'app.js', 'form.js', 'manifest.json', 'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
+const VERSION = 'v45';
+const FILES = ['./', 'index.html', 'history.js', 'plans.js', 'data.js', 'chart.js', 'app.js', 'form.js', 'settings.js', 'prefs.js', 'manifest.json', 'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));

@@ -102,7 +102,7 @@ function saveTransfer(n, date, memo) {
 function onTx(id) {
   const t = store.s.tx.find(x => x.id === id);
   if (!t) return;
-  if (t.kind === 'manual' && !t.group) return openForm(t);
+  if ((t.kind === 'manual' || t.kind === 'fixed') && !t.group) return openForm(t); // 고정지출도 그달 금액만 고칠 수 있게
   const what = t.kind === 'salary' ? '이 월급날 기록 전체(통장별 이체 포함)' : '이 이체 기록(양쪽 통장)';
   if (!confirm(`${what}를 지울까요?`)) return;
   store.s.tx = store.s.tx.filter(x => x.group !== t.group);

@@ -5,17 +5,16 @@ const LIVING_BUDGET = 600000;   // 생활비 55만 + K-패스 교통비 5만
 const LIVING_FLOOR = 50000;     // 이 아래면 생활비 다 씀
 const TAX = 0.154;
 
-// 통장 목록
-const ACCOUNTS = [
+// 고정 통장 (적금 통장은 설정의 적금 목록으로 만들어서 ACCOUNTS에 끼워 넣음 → plans.js syncAccounts)
+const BASE_ACCOUNTS = [
   { id: 'kb',    name: '국민',       full: '국민 입출금',         role: '월급 · 생활비 · 교통비',     color: '#e0a800' },
   { id: 'cash',  name: '현금',       full: '현금 (지갑)',         role: '세탁비 · 헌금',              color: '#6b7a8f' },
   { id: 'nh',    name: '농협',       full: '농협 입출금',         role: '월세 · 관리비 · 구독료',      color: '#2e9e5b' },
   { id: 'sh',    name: '신한',       full: '신한 입출금',         role: '비상금 · 20일 적금 이체', color: '#2f5fd0' },
-  { id: 'cpd',   dot: '적금', name: '신한 적금',   full: '신한 적금',     role: '매월 20일 30만',            color: '#7c4dcc', saving: true },
   { id: 'kk',    name: '카카오',     full: '카카오 입출금',       role: '매월 17일 적금 이체',     color: '#c9a400' },
-  { id: 'kks',   dot: '적금', name: '카카오 적금', full: '카카오 적금',     role: '매월 17일 72만',            color: '#8a6d00', saving: true },
   { id: 'bonus', dot: '예금', name: '보너스 예금', full: '보너스 1년 정기예금', role: '3월 보너스 전액',           color: '#c2553a', saving: true, hideIfZero: true },
 ];
+const ACCOUNTS = []; // 실제 통장 목록 (Store가 만들 때 채움)
 const accOf = id => ACCOUNTS.find(a => a.id === id);
 
 // 월급날 국민에서 나가는 돈
@@ -26,22 +25,11 @@ const SALARY_SPLIT = [
   { to: null, amount: 20000,  cat: '곗돈', label: '곗돈' },
 ];
 
-// 적금 납입 일정 (첫 회차는 시작 잔액에 이미 들어 있음)
-const SAVINGS = {
-  cpd: { from: 'sh', amount: 300000, maturity: '2027-04-20',
-         dates: ['2026-10-20', '2026-11-20', '2026-12-20', '2027-01-20', '2027-02-20', '2027-03-20'] },
-  kks: { from: 'kk', amount: 720000, maturity: null, // 설정값 사용
-         dates: ['2026-11-17', '2026-12-17', '2027-01-17', '2027-02-17', '2027-03-17', '2027-04-17'] },
-};
-// 날짜가 되면 자동으로 들어가는 이체 (첫 회차 제외)
-const SCHEDULE = Object.entries(SAVINGS).flatMap(([to, s]) =>
-  s.dates.slice(1).map((date, i) => ({ key: `${to}-${date}`, date, from: s.from, to, amount: s.amount, round: i + 2 })));
-
 // 비상금 예상에 쓰는 남은 월급날 (4월 예산까지)
 const SALARY_DATES = ['2026-11-25', '2026-12-25', '2027-01-25', '2027-02-25', '2027-03-25'];
 
-// 분류 ('기타'를 고르면 이름을 직접 쓸 수 있음 → 그 이름이 분류가 됨)
-const CATS = {
+// 기본 분류 ('기타'를 고르면 이름을 직접 쓸 수 있음 → 그 이름이 분류가 됨). 실제 분류는 설정 → 분류에서 고친 값(s.cats)
+const DEFAULT_CATS = {
   out: [['월세', '🏠'], ['관리비', '🏢'], ['구독', '📺'], ['식사', '🍚'], ['카페', '☕'], ['간식', '🍪'], ['선물', '🎁'], ['모임·여행', '🧳'],
         ['교통비', '🚌'], ['책', '📚'], ['옷', '👕'], ['화장품', '💄'], ['생필품', '🧴'], ['병원비', '💊'], ['경조사비', '💐'],
         ['택배·소포', '📦'], ['취미', '🎨'], ['세탁비', '🧺'], ['헌금', '⛪'], ['곗돈', '🤝'], ['기타', '✏️']],
@@ -50,7 +38,7 @@ const CATS = {
 // 세부 항목이 있는 분류 (그래프에선 한 조각, 표에서 나눠 보여줌)
 // 세부 항목을 안 골라도 저장되는 분류 (다시 누르면 선택 해제)
 const OPTIONAL_SUBS = ['식사'];
-const SUBCATS = {
+const DEFAULT_SUBCATS = {
   '관리비': ['전기', '가스', '수도'],
   '교통비': ['교통', '기차', '택시'],
   '구독': ['배달의민족', '넷플릭스', '디즈니플러스', '유튜브', '클로드'],
@@ -58,6 +46,8 @@ const SUBCATS = {
   '모임·여행': ['모임', '여행'],
   '취미': ['포스타입', '인형', '게임'],
 };
+const CATS = { out: [], in: [] }; // 실제 분류 (Store가 만들 때 s.cats로 채움 → syncCats)
+const SUBCATS = {};
 // 두 번째 선택지 (구독 결제 주기 / 누구랑)
 const WHO = { label: '누구랑', choices: ['혼자', '내가 사줌'] };
 const OPTS = {
@@ -91,8 +81,11 @@ const DEFAULT_STATE = {
   version: 2,
   baseDate: '2026-11-17',
   base: baseFromNow(),
-  rates: { cpd: null, kks: null },  // 연 %
-  kksMaturity: '2027-05-17',
+  savings: DEFAULT_SAVINGS, // 적금 목록 (설정하기에서 추가·수정)
+  fixed: [],               // 고정지출 { id, name, amount, day, acc, cat, sub, since }
+  cats: DEFAULT_CATS,      // 분류 (설정 → 분류에서 추가·수정·순서)
+  subcats: DEFAULT_SUBCATS,
+  accOrder: null,          // 홈 화면 통장 순서 (설정 → 통장에서 드래그)
   bonusExpect: null,
   baseEmergency: 0, // 신한 입출금 중 "현금 비상금" (매달 20만과 구분, 설정하기에서 입력)
   applied: {},  // 반영된 자동이체 key
@@ -121,7 +114,7 @@ const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2
 
 // ===== 상태 저장소 =====
 class Store {
-  constructor() { this.s = this.load(); }
+  constructor() { this.s = this.load(); syncAccounts(this.s); syncCats(this.s); }
 
   load() {
     try {
@@ -131,8 +124,18 @@ class Store {
     return JSON.parse(JSON.stringify(DEFAULT_STATE));
   }
   migrate(s) {
-    // 나중에 생긴 통장(현금 등)은 예전 저장본에 시작 잔액이 없으니 0원으로 채움
-    for (const a of ACCOUNTS) if (typeof s.base[a.id] !== 'number') s.base[a.id] = 0;
+    // 적금이 코드에 고정돼 있던 저장본: 금리·카카오 만기일 설정을 적금 목록으로 옮김
+    if (!Array.isArray(s.savings)) s.savings = JSON.parse(JSON.stringify(DEFAULT_SAVINGS));
+    for (const sv of s.savings) {
+      if (s.rates && sv.rate == null && s.rates[sv.id] != null) sv.rate = s.rates[sv.id];
+      if (s.kksMaturity && sv.id === 'kks') sv.maturity = s.kksMaturity;
+    }
+    delete s.rates; delete s.kksMaturity;
+    if (!Array.isArray(s.fixed)) s.fixed = [];
+    if (!s.cats) s.cats = JSON.parse(JSON.stringify(DEFAULT_CATS));
+    if (!s.subcats) s.subcats = JSON.parse(JSON.stringify(DEFAULT_SUBCATS));
+    syncAccounts(s); // 통장 목록 만들기 + 없는 시작 잔액은 0원으로
+    syncCats(s);
     // 처음 기록(history.js) 중 저장본에 없는 것만 넣고, 그만큼 시작 잔액을 거꾸로 조정 (지금 잔액은 그대로)
     const have = new Set(s.tx.map(t => t.id));
     for (const t of INITIAL_TX) {
@@ -151,7 +154,7 @@ class Store {
   save() {
     try { localStorage.setItem(KEY, JSON.stringify(this.s)); return true; } catch (e) { return false; }
   }
-  reset() { this.s = JSON.parse(JSON.stringify(DEFAULT_STATE)); this.save(); }
+  reset() { this.s = JSON.parse(JSON.stringify(DEFAULT_STATE)); syncAccounts(this.s); syncCats(this.s); this.save(); }
 
   // 잔액 = 시작 잔액 + 모든 기록 합
   balance(acc) {
@@ -159,11 +162,16 @@ class Store {
     return (this.s.base[acc] || 0) + this.s.tx.reduce((sum, t) => t.acc === acc && !t.gift ? sum + t.amt : sum, 0);
   }
 
-  // 날짜가 지난 자동이체 반영. 반영된 개수 반환
+  // 날짜가 지난 적금 자동이체 · 고정지출 반영. 반영된 개수 반환
   applyAuto() {
     const t = today();
     let n = 0;
-    for (const it of SCHEDULE) {
+    for (const { key, date, f } of fixedDue(this.s, t)) {
+      this.s.tx.push({ id: newId(), date, acc: f.acc, amt: -f.amount, cat: f.cat, sub: f.sub || null, memo: f.name, kind: 'fixed', fixedId: f.id, order: 0 });
+      this.s.applied[key] = true;
+      n++;
+    }
+    for (const it of schedule(this.s)) {
       if (it.date > t || this.s.applied[it.key]) continue;
       const group = newId(), name = accOf(it.to).full;
       this.s.tx.push(
@@ -200,7 +208,7 @@ class Store {
   // 자동이체가 예정돼 있고 그 돈이 이미 통장에 들어와 있는 금액 (비상금에서 제외)
   pendingRaw(acc) {
     const t = today(), baseBudget = budgetOf(this.s.baseDate);
-    return SCHEDULE.filter(it => it.from === acc && !this.s.applied[it.key] && it.date > t)
+    return schedule(this.s).filter(it => it.from === acc && !this.s.applied[it.key] && it.date > t)
       .filter(it => { const b = it.date.slice(0, 7); return b <= baseBudget || this.salaryDone(b); })
       .reduce((s, it) => s + it.amount, 0);
   }
@@ -209,7 +217,7 @@ class Store {
     return Math.min(this.pendingRaw(acc), Math.max(0, this.balance(acc)));
   }
   nextAuto(acc) {
-    return SCHEDULE.find(it => (it.from === acc || it.to === acc) && !this.s.applied[it.key]);
+    return schedule(this.s).find(it => (it.from === acc || it.to === acc) && !this.s.applied[it.key]);
   }
 
   // 실제 잔액으로 맞추기: 기록을 남기지 않고 시작 잔액을 차이만큼 조정. 조정액 반환
@@ -220,7 +228,7 @@ class Store {
     return diff;
   }
 
-  saved() { return this.balance('cpd') + this.balance('kks') + this.balance('bonus'); }
+  saved() { return ACCOUNTS.filter(a => a.saving).reduce((s, a) => s + this.balance(a.id), 0); }
   emergency() {
     const sh = this.balance('sh') - this.pending('sh');
     const kk = this.balance('kk') - this.pending('kk');
@@ -239,24 +247,27 @@ class Store {
     return this.adjustTo('sh', monthly + cash + this.pendingRaw('sh'));
   }
   paidRounds(id) {
-    return 1 + SCHEDULE.filter(it => it.to === id && this.s.applied[it.key]).length;
+    const sv = this.s.savings.find(x => x.id === id);
+    return sv.paidBefore + schedule(this.s).filter(it => it.to === id && this.s.applied[it.key]).length;
   }
 
   // 적금 만기 예상 (단리 · 회차별 예치 일수)
   forecast(id) {
-    const sv = SAVINGS[id], rate = (this.s.rates[id] || 0) / 100;
-    const maturity = sv.maturity || this.s.kksMaturity;
-    const principal = sv.amount * sv.dates.length;
-    const pre = sv.dates.reduce((s, d) => s + Math.round(sv.amount * rate * Math.max(0, daysBetween(d, maturity)) / 365), 0);
+    const sv = this.s.savings.find(x => x.id === id), rate = (sv.rate || 0) / 100;
+    const maturity = sv.maturity || addMonths(sv.start, sv.count), dates = savingDates(sv);
+    const principal = sv.amount * dates.length;
+    const pre = dates.reduce((s, d) => s + Math.round(sv.amount * rate * Math.max(0, daysBetween(d, maturity)) / 365), 0);
     const tax = Math.floor(pre * TAX / 10) * 10;
     return { principal, pre, tax, post: pre - tax, total: principal + pre - tax, maturity };
   }
 
-  // 4월 말 비상금 예상: 지금 비상금 + 아직 안 받은 월급의 신한 몫 (신한 적금 끝나면 50만 전액)
+  // 4월 말 비상금 예상: 지금 비상금 + 아직 안 받은 월급의 신한 몫 - 그 달 신한에서 나갈 적금
   emergencyForecast() {
-    const lastCpd = SAVINGS.cpd.dates[SAVINGS.cpd.dates.length - 1];
-    const add = SALARY_DATES.filter(d => !this.salaryDone(budgetOf(d)))
-      .reduce((s, d) => s + (budgetOf(d) <= lastCpd.slice(0, 7) ? 200000 : 500000), 0);
+    const shIn = SALARY_SPLIT.find(x => x.to === 'sh').amount, plan = schedule(this.s);
+    const add = SALARY_DATES.filter(d => !this.salaryDone(budgetOf(d))).reduce((sum, d) => {
+      const b = budgetOf(d);
+      return sum + shIn - plan.filter(it => it.from === 'sh' && it.date.slice(0, 7) === b).reduce((x, it) => x + it.amount, 0);
+    }, 0);
     return this.emergency().total + add;
   }
 }

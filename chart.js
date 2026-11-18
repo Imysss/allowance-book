@@ -1,5 +1,5 @@
 // ===== 이 달 어디에 썼는지: 원형 그래프 + 표 =====
-// 포함: 직접 적은 지출(통장 이체 제외) + 월급날 곗돈. 교통비는 환급만큼 차감.
+// 포함: 직접 적은 지출·고정지출(통장 이체 제외) + 월급날 곗돈. 교통비는 환급만큼 차감.
 const PALETTE = ['#3c7a5a', '#e0a800', '#d0573f', '#2f5fd0', '#7c4dcc', '#2e9e5b', '#c2553a', '#1f9bb5', '#d64d8a', '#8a6d00', '#6b7a8f', '#a0522d', '#4f8f2f', '#b07cc6'];
 
 // cat → (key → 금액) 누적
@@ -7,7 +7,7 @@ function addNested(map, cat, key, v) {
   const m = map.get(cat) || new Map(); map.set(cat, m);
   m.set(key, (m.get(key) || 0) + v);
 }
-const isSpend = t => t.amt < 0 && !t.transfer && (t.kind === 'manual' || t.cat === '곗돈');
+const isSpend = t => t.amt < 0 && !t.transfer && (t.kind === 'manual' || t.kind === 'fixed' || t.cat === '곗돈');
 
 function renderChart(list) {
   const sum = new Map(), subSum = new Map(), optSum = new Map(), giftSum = new Map();

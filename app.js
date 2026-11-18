@@ -23,9 +23,9 @@ function render() {
 
 // ----- 홈 -----
 function renderHome() {
-  const cpd = store.balance('cpd'), kks = store.balance('kks'), bonus = store.balance('bonus');
   $('#savedTotal').textContent = won(store.saved());
-  $('#savedDetail').innerHTML = `신한 적금 <b>${won(cpd)}</b><br>카카오 적금 <b>${won(kks)}</b>` + (bonus ? `<br>보너스 예금 <b>${won(bonus)}</b>` : '');
+  $('#savedDetail').innerHTML = ACCOUNTS.filter(a => a.saving && !(a.hideIfZero && !store.balance(a.id)))
+    .map(a => `${esc(a.name)} <b>${won(store.balance(a.id))}</b>`).join('<br>');
 
   const em = store.emergency();
   $('#emergTotal').textContent = won(em.total);
@@ -47,9 +47,11 @@ function renderHome() {
   let total = 0;
   $('#accList').innerHTML = ACCOUNTS.filter(a => !(a.hideIfZero && store.balance(a.id) === 0)).map(a => {
     const b = store.balance(a.id); total += b;
-    const nx = store.nextAuto(a.id);
-    const note = nx ? (nx.from === a.id ? `${md(nx.date)} ${ro(accOf(nx.to).name)} -${short(nx.amount)} 자동이체` : `${md(nx.date)} ${nx.round}회차 +${short(nx.amount)} 들어올 예정`) : '';
-    const extra = a.saving && SAVINGS[a.id] ? ` · ${store.paidRounds(a.id)}/6회` : '';
+    const nx = store.nextAuto(a.id), fx = nextFixed(store.s, a.id), sv = a.saving && savingOf(a.id);
+    // 다음 적금 자동이체, 없으면 다음 고정지출
+    const note = nx ? (nx.from === a.id ? `${md(nx.date)} ${ro(accOf(nx.to).name)} -${short(nx.amount)} 자동이체` : `${md(nx.date)} ${nx.round}회차 +${short(nx.amount)} 들어올 예정`)
+      : fx ? `${md(fx.date)} ${fx.f.name} -${short(fx.f.amount)} 자동 출금` : '';
+    const extra = sv && !sv.closed ? ` · ${store.paidRounds(a.id)}/${sv.count}회` : '';
     const split = accSplit(a.id, em);
     return `<button class="acc" data-acc="${a.id}">
       <div class="dot" style="background:${a.color}">${esc(a.dot || a.name.slice(0, 2))}</div>
@@ -118,41 +120,10 @@ function groupHtml(list) {
       <div class="rows">${g.items.map(t => `
         <button class="row" data-id="${t.id}">
           <div class="emoji">${emojiOf(t.cat)}</div>
-          <div class="meta"><b>${esc(t.memo || catLabel(t))}</b><span>${t.gift ? '' : esc(accOf(t.acc).name) + ' · '}${esc(catLabel(t))}${t.kind === 'auto' ? ' · 자동이체' : t.kind === 'salary' ? ' · 월급날' : ''}</span></div>
+          <div class="meta"><b>${esc(t.memo || catLabel(t))}</b><span>${t.gift ? '' : esc(accOf(t.acc).name) + ' · '}${esc(catLabel(t))}${t.kind === 'auto' ? ' · 자동이체' : t.kind === 'salary' ? ' · 월급날' : t.kind === 'fixed' ? ' · 고정지출' : ''}</span></div>
           ${t.gift ? `<div class="amt num gift">🎁 ${won(-t.amt)}</div>` : `<div class="amt num ${t.amt > 0 ? 'in-c' : 'out-c'}">${signed(t.amt)}</div>`}
         </button>`).join('')}</div></div>`;
   }).join('');
-}
-
-// ----- 적금 -----
-function renderSavings() {
-  $('#savingCards').innerHTML = Object.keys(SAVINGS).map(id => {
-    const a = accOf(id), sv = SAVINGS[id], f = store.forecast(id), paid = store.paidRounds(id);
-    const nx = store.nextAuto(id);
-    return `<div class="card saving" style="margin-bottom:12px">
-      <h3>${esc(a.full)}</h3><div class="label">월 ${short(sv.amount)}원 × 6회 · 만기 ${f.maturity.replace(/-/g, '.')}</div>
-      <div class="progress">${sv.dates.map((_, i) => `<i class="${i < paid ? 'on' : ''}"></i>`).join('')}</div>
-      <div class="kv"><span>지금까지 넣은 돈 (${paid}/6회)</span><b class="num">${won(store.balance(id))}</b></div>
-      <div class="kv"><span>다음 납입</span><b>${nx ? `${md(nx.date)} ${nx.round}회차` : '납입 끝!'}</b></div>
-      <div class="kv"><span>적용 금리 (연)</span><label class="rate"><input class="num" inputmode="decimal" data-rate="${id}" value="${store.s.rates[id] ?? ''}" placeholder="0.0">%</label></div>
-      <div class="kv"><span>만기 원금</span><b class="num">${won(f.principal)}</b></div>
-      <div class="kv"><span>세전 이자</span><b class="num">${won(f.pre)}</b></div>
-      <div class="kv"><span>이자소득세 15.4%</span><b class="num">-${won(f.tax)}</b></div>
-      <div class="kv total"><span>만기 예상 수령액</span><b class="num">${won(f.total)}</b></div>
-    </div>`;
-  }).join('');
-
-  const cpd = store.forecast('cpd'), kks = store.forecast('kks');
-  const em = store.emergencyForecast();
-  const bonus = store.balance('bonus') || store.s.bonusExpect || 0;
-  const sum = cpd.total + kks.total + em + bonus;
-  $('#forecast').innerHTML = `
-    <div class="kv"><span>신한 적금 만기금 (${md(cpd.maturity)})</span><b class="num">${won(cpd.total)}</b></div>
-    <div class="kv"><span>카카오 적금 만기금 (${md(kks.maturity)})</span><b class="num">${won(kks.total)}</b></div>
-    <div class="kv"><span>비상금 (신한 + 카카오)</span><b class="num">${won(em)}</b></div>
-    <div class="kv"><span>보너스 정기예금${store.balance('bonus') ? '' : ' (예상)'}</span><b class="num">${won(bonus)}</b></div>
-    <div class="kv total"><span>합계</span><b class="num">${won(sum)}</b></div>
-    <div class="kv"><span>청약 미납분 230만 넣은 뒤</span><b class="num">${won(sum - 2300000)}</b></div>`;
 }
 
 // ===== 시트 =====
@@ -197,14 +168,14 @@ function openSettings() {
   $('#baseLabel').textContent = '시작 잔액 (10월 첫 기록 이전 금액 · 지금 잔액을 맞출 땐 내역의 "실제 잔액으로 맞추기"가 편해요)';
   $('#baseInputs').innerHTML = ACCOUNTS.filter(a => a.id !== 'bonus').map(a =>
     `<div><label>${a.full}</label><input class="input num" inputmode="numeric" data-base="${a.id}" value="${store.s.base[a.id].toLocaleString('ko-KR')}"></div>`).join('');
-  $('#kksMaturity').value = store.s.kksMaturity;
+  renderPlanLists(); // 고정지출·적금 목록 (settings.js)
+  renderPrefs();     // 탭 · 통장 순서 · 분류 (prefs.js)
   $('#bonusExpect').value = store.s.bonusExpect ? store.s.bonusExpect.toLocaleString('ko-KR') : '';
   $('#baseEmergency').value = store.s.baseEmergency.toLocaleString('ko-KR');
   openSheet($('#settingsSheet'));
 }
 function saveSettings() {
   document.querySelectorAll('[data-base]').forEach(el => { store.s.base[el.dataset.base] = parseWon(el.value); });
-  store.s.kksMaturity = $('#kksMaturity').value || store.s.kksMaturity;
   store.s.bonusExpect = parseWon($('#bonusExpect').value) || null;
   store.s.baseEmergency = parseWon($('#baseEmergency').value);
   persist(); closeSheets(); render(); toast('저장했어요');
@@ -229,7 +200,7 @@ function importData(file) {
       const data = JSON.parse(r.result);
       if (data.version !== 2 || !Array.isArray(data.tx)) throw new SyntaxError('형식 오류');
       if (!confirm(`기록 ${data.tx.length}개를 불러올까요? 지금 기록은 백업 내용으로 바뀌어요.`)) return;
-      store.s = { ...JSON.parse(JSON.stringify(DEFAULT_STATE)), ...data };
+      store.s = store.migrate({ ...JSON.parse(JSON.stringify(DEFAULT_STATE)), ...data });
       persist(); closeSheets(); render(); toast('불러왔어요');
     } catch (e) { toast('백업 파일을 읽지 못했어요'); }
   };
@@ -290,12 +261,6 @@ $('#analysisBtn').onclick = () => {
 $('#anPrev').onclick = () => { anMonth.setMonth(anMonth.getMonth() - 1); drawAnalysis(); };
 $('#anNext').onclick = () => { anMonth.setMonth(anMonth.getMonth() + 1); drawAnalysis(); };
 $('#filters').onclick = e => { const b = e.target.closest('[data-filter]'); if (b) { histFilter = b.dataset.filter; render(); } };
-$('#savingCards').addEventListener('change', e => {
-  const id = e.target.dataset.rate; if (!id) return;
-  const v = parseFloat(e.target.value.replace(',', '.'));
-  store.s.rates[id] = isNaN(v) ? null : v;
-  persist(); render();
-});
 ['#payAmount', '#payBonus'].forEach(s => { $(s).oninput = e => { fmtInput(e.target); drawPay(); }; });
 $('#payConfirm').onclick = confirmPay;
 $('#settingsSheet').addEventListener('input', e => { if (e.target.dataset.base !== undefined || e.target.id === 'bonusExpect' || e.target.id === 'baseEmergency') fmtInput(e.target); });
