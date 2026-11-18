@@ -50,8 +50,7 @@ function renderHome() {
     const nx = store.nextAuto(a.id);
     const note = nx ? (nx.from === a.id ? `${md(nx.date)} ${ro(accOf(nx.to).name)} -${short(nx.amount)} 자동이체` : `${md(nx.date)} ${nx.round}회차 +${short(nx.amount)} 들어올 예정`) : '';
     const extra = a.saving && SAVINGS[a.id] ? ` · ${store.paidRounds(a.id)}/6회` : '';
-    // 신한 입출금: 잔액(이체 대기분 포함) 아래에 비상금 구분을 작게
-    const split = a.id === 'sh' ? `<small>매달 비상금 ${won(em.monthly)}<br>현금 비상금 ${won(em.cash)}</small>` : '';
+    const split = accSplit(a.id, em);
     return `<button class="acc" data-acc="${a.id}">
       <div class="dot" style="background:${a.color}">${esc(a.dot || a.name.slice(0, 2))}</div>
       <div class="meta"><b>${esc(a.full)}${extra}</b><span>${esc(a.role)}</span>${note ? `<em>${esc(note)}</em>` : ''}</div>
@@ -61,6 +60,15 @@ function renderHome() {
 
   const recent = sortTx(store.s.tx).slice(0, 8);
   $('#recent').innerHTML = recent.length ? groupHtml(recent) : `<div class="empty">아직 기록이 없어요.<br>+ 버튼으로 쓴 돈을 적거나, 월급날에 위 버튼을 눌러주세요.</div>`;
+}
+
+// 통장 금액 아래 작은 구분 줄: 초록 = 비상금, 회색 = 곧 적금으로 넘어갈 돈 (날짜 되면 자동이체 후 사라짐)
+function accSplit(id, em) {
+  const wait = store.pending(id);
+  const waitLine = wait ? `<span class="wait">적금 이체 대기 ${won(wait)}</span>` : '';
+  if (id === 'sh') return `<small>매달 비상금 ${won(em.monthly)}<br>현금 비상금 ${won(em.cash)}${waitLine ? '<br>' + waitLine : ''}</small>`;
+  if (id === 'kk' && wait) return `<small>비상금 ${won(em.kk)}<br>${waitLine}</small>`;
+  return '';
 }
 
 // ----- 내역 -----
