@@ -125,7 +125,7 @@
   .set-pane .label{margin-bottom:10px}
   .set-list{margin-top:4px}
   .sort-list .row{cursor:default}
-  .drag{margin-left:4px;padding:8px 6px;font-size:20px;color:var(--sub);touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
+  .drag{margin-left:4px;padding:10px 12px;margin-right:-8px;font-size:22px;color:var(--sub);touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none} /* 손가락으로 잡기 쉽게 넓게 */
   .row.dragging{background:var(--chip);box-shadow:0 6px 18px rgba(0,0,0,.25);position:relative;z-index:2}
   .add-chip{margin-top:10px;color:var(--accent);font-weight:700}
   .input:disabled{opacity:.5}
@@ -413,9 +413,9 @@
       <button class="chip" data-set="saving">🐷 적금</button>
       <button class="chip" data-set="fixed">📌 고정지출</button>
       <button class="chip" data-set="balance">💰 잔액 설정</button>
-      <button class="chip" data-set="backup">💾 저장</button>
       <button class="chip" data-set="accounts">🏦 통장</button>
       <button class="chip" data-set="cats">🏷️ 분류</button>
+      <button class="chip" data-set="backup">💾 저장</button>
     </div>
 
     <section class="set-pane" data-pane="saving">

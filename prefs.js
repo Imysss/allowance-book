@@ -15,30 +15,66 @@ function renderPrefs() {
   showSetTab(setTab);
 }
 
-// ----- 끌어서 순서 바꾸기 (아이폰 터치 포함: ☰ 손잡이를 잡고 위아래로) -----
+// ----- 끌어서 순서 바꾸기 (☰ 손잡이를 잡고 위아래로) -----
+// 아이폰 Safari는 포인터 이벤트로 끌면 스크롤로 넘어가며 취소되는 경우가 있어서
+// 터치는 touch 이벤트(스크롤 막기)로, 마우스는 pointer 이벤트로 처리.
+// 끄는 손가락이 시트 위·아래 끝에 가까우면 시트를 자동으로 스크롤.
 function makeSortable(box, onDone) {
+  let item = null, lastY = 0, raf = 0;
+  const scroller = () => box.closest('.sheet');
+  const place = y => {
+    const others = [...box.querySelectorAll('[data-sort]')].filter(x => x !== item);
+    const after = others.find(x => { const r = x.getBoundingClientRect(); return y < r.top + r.height / 2; });
+    box.insertBefore(item, after || null);
+  };
+  const autoScroll = () => {
+    if (!item) return;
+    const sc = scroller(), r = sc.getBoundingClientRect(), edge = 70;
+    const step = lastY < r.top + edge ? -Math.ceil((r.top + edge - lastY) / 6) : lastY > r.bottom - edge ? Math.ceil((lastY - (r.bottom - edge)) / 6) : 0;
+    if (step) { sc.scrollTop += step; place(lastY); }
+    raf = requestAnimationFrame(autoScroll);
+  };
+  const start = (target, y) => {
+    item = target.closest('[data-sort]');
+    lastY = y;
+    item.classList.add('dragging');
+    raf = requestAnimationFrame(autoScroll);
+  };
+  const move = y => { lastY = y; place(y); };
+  const end = () => {
+    if (!item) return;
+    cancelAnimationFrame(raf);
+    item.classList.remove('dragging');
+    item = null;
+    onDone([...box.querySelectorAll('[data-sort]')].map(x => x.dataset.sort));
+  };
+
+  // 터치 (아이폰·안드로이드)
+  box.addEventListener('touchstart', e => {
+    const handle = e.target.closest('.drag');
+    if (!handle || e.touches.length > 1) return;
+    e.preventDefault(); // 스크롤로 넘어가지 않게
+    start(handle, e.touches[0].clientY);
+  }, { passive: false });
+  box.addEventListener('touchmove', e => {
+    if (!item) return;
+    e.preventDefault();
+    move(e.touches[0].clientY);
+  }, { passive: false });
+  box.addEventListener('touchend', end);
+  box.addEventListener('touchcancel', end);
+
+  // 마우스 (컴퓨터)
   box.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'touch') return; // 터치는 위에서 처리
     const handle = e.target.closest('.drag');
     if (!handle) return;
-    const item = handle.closest('[data-sort]');
     e.preventDefault();
-    handle.setPointerCapture(e.pointerId);
-    item.classList.add('dragging');
-    const move = ev => {
-      const others = [...box.querySelectorAll('[data-sort]')].filter(x => x !== item);
-      const after = others.find(x => { const r = x.getBoundingClientRect(); return ev.clientY < r.top + r.height / 2; });
-      box.insertBefore(item, after || null);
-    };
-    const up = () => {
-      handle.removeEventListener('pointermove', move);
-      handle.removeEventListener('pointerup', up);
-      handle.removeEventListener('pointercancel', up);
-      item.classList.remove('dragging');
-      onDone([...box.querySelectorAll('[data-sort]')].map(x => x.dataset.sort));
-    };
-    handle.addEventListener('pointermove', move);
-    handle.addEventListener('pointerup', up);
-    handle.addEventListener('pointercancel', up);
+    start(handle, e.clientY);
+    const mv = ev => move(ev.clientY);
+    const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); end(); };
+    window.addEventListener('pointermove', mv);
+    window.addEventListener('pointerup', up);
   });
 }
 
