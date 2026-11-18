@@ -293,20 +293,39 @@ $('#payConfirm').onclick = confirmPay;
 $('#settingsSheet').addEventListener('input', e => { if (e.target.dataset.base !== undefined || e.target.id === 'bonusExpect' || e.target.id === 'baseEmergency') fmtInput(e.target); });
 $('#settingsSave').onclick = saveSettings;
 // ----- 실제 잔액으로 맞추기 -----
+const commaVal = n => (n > 0 ? n.toLocaleString('ko-KR') : '');
 $('#adjustBtn').onclick = () => {
-  const b = store.balance(histFilter);
+  const b = store.balance(histFilter), isSh = histFilter === 'sh';
   $('#adjustTitle').textContent = `${accOf(histFilter).full} 잔액 맞추기`;
   $('#adjustNow').textContent = `앱에 적힌 잔액 ${won(b)}`;
-  $('#adjustAmount').value = b > 0 ? b.toLocaleString('ko-KR') : '';
+  $('#adjustOne').hidden = isSh;
+  $('#adjustSh').hidden = !isSh;
+  if (isSh) {
+    // 신한은 매달 / 현금 비상금을 따로 맞춤. 적금 이체 대기분은 앱이 더함
+    const em = store.emergency(), p = store.pendingRaw('sh');
+    $('#adjMonthly').value = commaVal(em.monthly);
+    $('#adjCash').value = commaVal(em.cash);
+    $('#adjustPending').textContent = p ? `곧 적금으로 나갈 ${won(p)}은 앱이 알아서 더해요. 통장 잔액에서 이 금액을 뺀 나머지를 나눠 적어주세요.` : '';
+  } else {
+    $('#adjustAmount').value = commaVal(b);
+  }
   openSheet($('#adjustSheet'));
-  setTimeout(() => $('#adjustAmount').select(), 260);
+  if (!isSh) setTimeout(() => $('#adjustAmount').select(), 260);
 };
-$('#adjustAmount').oninput = e => fmtInput(e.target);
+['#adjustAmount', '#adjMonthly', '#adjCash'].forEach(s => { $(s).oninput = e => fmtInput(e.target); });
 $('#adjustSave').onclick = () => {
+  const name = accOf(histFilter).name;
+  if (histFilter === 'sh') {
+    const monthly = parseWon($('#adjMonthly').value), cash = parseWon($('#adjCash').value);
+    const diff = store.adjustEmergency(monthly, cash);
+    closeSheets(); render();
+    toast(`매달 비상금 ${won(monthly)} · 현금 비상금 ${won(cash)}으로 맞췄어요${diff ? ` (${signed(diff)})` : ''}`);
+    return;
+  }
   const actual = parseWon($('#adjustAmount').value);
   const diff = store.adjustTo(histFilter, actual);
   closeSheets(); render();
-  toast(diff ? `${accOf(histFilter).name} 잔액을 ${won(actual)}으로 맞췄어요 (${signed(diff)})` : '이미 같은 금액이에요');
+  toast(diff ? `${name} 잔액을 ${won(actual)}으로 맞췄어요 (${signed(diff)})` : '이미 같은 금액이에요');
 };
 $('#exportBtn').onclick = exportData;
 $('#importBtn').onclick = () => $('#fileInput').click();

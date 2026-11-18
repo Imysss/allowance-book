@@ -65,7 +65,9 @@ const OPTS = {
   '식사': WHO, '카페': WHO,
 };
 const optOf = t => t.opt || (t.treat ? '내가 사줌' : null);
-const catLabel = t => [t.sub ? `${t.cat}(${t.sub})` : t.cat, optOf(t), t.gift ? '🎁 기프티콘' : null].filter(Boolean).join(' · ');
+// 신한에서 꺼내 쓴 돈이 어느 비상금인지
+const FUNDS = { monthly: '매달 비상금', cash: '현금 비상금' };
+const catLabel = t => [t.sub ? `${t.cat}(${t.sub})` : t.cat, optOf(t), t.gift ? '🎁 기프티콘' : null, FUNDS[t.fund]].filter(Boolean).join(' · ');
 const SYS_EMOJI = { '이체': '🔁', '곗돈': '🤝', '적금': '🐷', '보너스': '🎉', '월급': '💼' };
 const emojiOf = cat => SYS_EMOJI[cat] || [...CATS.out, ...CATS.in].find(c => c[0] === cat)?.[1] || '✏️';
 const isPreset = (cat, sign) => CATS[sign < 0 ? 'out' : 'in'].some(c => c[0] === cat);
@@ -196,13 +198,15 @@ class Store {
   }
 
   // 자동이체가 예정돼 있고 그 돈이 이미 통장에 들어와 있는 금액 (비상금에서 제외)
-  pending(acc) {
+  pendingRaw(acc) {
     const t = today(), baseBudget = budgetOf(this.s.baseDate);
-    const sum = SCHEDULE.filter(it => it.from === acc && !this.s.applied[it.key] && it.date > t)
+    return SCHEDULE.filter(it => it.from === acc && !this.s.applied[it.key] && it.date > t)
       .filter(it => { const b = it.date.slice(0, 7); return b <= baseBudget || this.salaryDone(b); })
       .reduce((s, it) => s + it.amount, 0);
-    // 통장에 실제로 있는 돈보다 많이 잡지 않음 (잔액 0원인데 대기 30만이면 비상금이 마이너스가 되는 문제)
-    return Math.min(sum, Math.max(0, this.balance(acc)));
+  }
+  // 통장에 실제로 있는 돈보다 많이 잡지 않음 (잔액 0원인데 대기 30만이면 비상금이 마이너스가 되는 문제)
+  pending(acc) {
+    return Math.min(this.pendingRaw(acc), Math.max(0, this.balance(acc)));
   }
   nextAuto(acc) {
     return SCHEDULE.find(it => (it.from === acc || it.to === acc) && !this.s.applied[it.key]);
@@ -220,9 +224,19 @@ class Store {
   emergency() {
     const sh = this.balance('sh') - this.pending('sh');
     const kk = this.balance('kk') - this.pending('kk');
-    // 신한 비상금 = 현금 비상금(고정액) + 매달 쌓인 비상금(20만씩)
-    const cash = Math.min(this.s.baseEmergency, Math.max(0, sh));
+    // 신한 비상금 = 현금 비상금(설정액 - 현금 비상금에서 쓴 돈) + 나머지는 매달 쌓인 비상금
+    const cashLeft = Math.max(0, this.s.baseEmergency - this.cashFundSpent());
+    const cash = Math.min(cashLeft, Math.max(0, sh));
     return { sh, kk, cash, monthly: sh - cash, total: sh + kk };
+  }
+  // 신한에서 "현금 비상금"으로 표시하고 꺼낸 돈 합계
+  cashFundSpent() {
+    return this.s.tx.reduce((sum, t) => t.acc === 'sh' && t.fund === 'cash' && t.amt < 0 ? sum - t.amt : sum, 0);
+  }
+  // 신한 실제 잔액 맞추기: 매달·현금 비상금을 각각 입력 (적금 이체 대기분은 앱이 더함)
+  adjustEmergency(monthly, cash) {
+    this.s.baseEmergency = cash + this.cashFundSpent();
+    return this.adjustTo('sh', monthly + cash + this.pendingRaw('sh'));
   }
   paidRounds(id) {
     return 1 + SCHEDULE.filter(it => it.to === id && this.s.applied[it.key]).length;

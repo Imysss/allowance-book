@@ -1,7 +1,7 @@
 // ===== 기록 입력 시트 (나간 돈 / 들어온 돈 / 통장 이체) =====
 // app.js 다음에 로드됨: store, $, persist, render, toast, openSheet, closeSheets 사용
 const TRANSFER = 0;
-let editing = null, fSign = -1, fAcc = 'kb', fTo = 'cash', fCat = null, fSub = null, fOpt = null;
+let editing = null, fSign = -1, fAcc = 'kb', fTo = 'cash', fCat = null, fSub = null, fOpt = null, fFund = 'monthly';
 
 function openForm(t, acc) {
   editing = t || null;
@@ -10,6 +10,7 @@ function openForm(t, acc) {
   fCat = t ? t.cat : null;
   fSub = t ? t.sub || null : null;
   fOpt = t ? optOf(t) : null;
+  fFund = (t && t.fund) || 'monthly';
   $('#gift').checked = !!(t && t.gift);
   $('#etcName').value = '';
   if (t && !isPreset(t.cat, fSign)) { $('#etcName').value = t.cat; fCat = '기타'; } // 직접 쓴 분류
@@ -39,6 +40,10 @@ function drawForm() {
   $('#toChips').innerHTML = isTr ? chipsHtml(accItems().filter(([id]) => id !== fAcc), fTo, 'to') : '';
   $('#giftRow').hidden = fSign >= 0;
   $('#accField').hidden = gift;
+  // 신한에서 꺼내는 돈(나간 돈·이체)이면 매달 / 현금 비상금 중 고르기
+  const showFund = fAcc === 'sh' && (fSign < 0 || isTr) && !gift;
+  $('#fundField').hidden = !showFund;
+  if (showFund) $('#fundChips').innerHTML = chipsHtml(Object.entries(FUNDS), fFund, 'fund');
   $('#catField').hidden = isTr;
   if (isTr) return;
 
@@ -65,13 +70,17 @@ function drawForm() {
   }
 }
 
+// 신한에서 꺼낸 돈일 때만 비상금 구분 저장
+const fundOf = () => ($('#fundField').hidden ? null : fFund);
+
 function saveForm() {
   const n = parseWon($('#amount').value);
   if (n <= 0) { toast('금액을 입력해 주세요'); return; }
   const date = $('#date').value || today(), memo = $('#memo').value.trim();
   if (fSign === TRANSFER) return saveTransfer(n, date, memo);
   const cat = fCat === '기타' ? ($('#etcName').value.trim() || '기타') : fCat;
-  const data = { date, acc: fAcc, amt: fSign * n, cat, sub: fSub, opt: fOpt, treat: false, gift: fSign < 0 && $('#gift').checked, memo };
+  const data = { date, acc: fAcc, amt: fSign * n, cat, sub: fSub, opt: fOpt, treat: false, gift: fSign < 0 && $('#gift').checked, memo,
+    fund: fundOf() };
   if (editing) Object.assign(editing, data);
   else store.s.tx.push({ id: newId(), kind: 'manual', order: Date.now(), ...data });
   persist(); closeSheets(); render();
@@ -83,7 +92,7 @@ function saveTransfer(n, date, memo) {
   const group = newId(), order = Date.now(), from = accOf(fAcc).name, to = accOf(fTo).name;
   const base = { date, kind: 'manual', group, transfer: true, cat: '이체', order };
   store.s.tx.push(
-    { id: newId(), ...base, acc: fAcc, amt: -n, memo: memo || `${ro(to)} 이체` },
+    { id: newId(), ...base, acc: fAcc, amt: -n, memo: memo || `${ro(to)} 이체`, fund: fundOf() },
     { id: newId(), ...base, acc: fTo, amt: n, memo: memo || `${from}에서 이체` });
   persist(); closeSheets(); render();
   toast(`${from} → ${to} ${won(n)} 이체`);
@@ -108,6 +117,7 @@ pick('#toChips', 'to', v => { fTo = v; });
 pick('#catChips', 'cat', v => { fCat = v; });
 pick('#subChips', 'sub', v => { fSub = fSub === v && OPTIONAL_SUBS.includes(fCat) ? null : v; });
 pick('#optChips', 'opt', v => { fOpt = v; });
+pick('#fundChips', 'fund', v => { fFund = v; });
 $('#gift').onchange = drawForm;
 $('#quick').onclick = e => {
   const b = e.target.closest('button'); if (!b) return;

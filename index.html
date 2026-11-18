@@ -310,6 +310,10 @@
       <div class="field-label">받는 통장</div>
       <div class="chips" id="toChips"></div>
     </div>
+    <div id="fundField" hidden>
+      <div class="field-label">어느 비상금에서 썼나요?</div>
+      <div class="chips" id="fundChips"></div>
+    </div>
     <div id="catField">
       <div class="field-label">분류</div>
       <div class="chips" id="catChips"></div>
@@ -349,9 +353,17 @@
     <div class="grab"></div>
     <h3 id="adjustTitle"></h3>
     <div class="label" id="adjustNow"></div>
-    <div class="amount-wrap">
+    <div class="amount-wrap" id="adjustOne">
       <input id="adjustAmount" class="amount-input num" inputmode="numeric" placeholder="0">
       <span>원</span>
+    </div>
+    <!-- 신한: 매달 비상금 / 현금 비상금을 따로 -->
+    <div id="adjustSh" hidden>
+      <div class="grid2" style="margin:16px 0 8px">
+        <div><label>매달 비상금</label><input id="adjMonthly" class="input num" inputmode="numeric" placeholder="0"></div>
+        <div><label>현금 비상금</label><input id="adjCash" class="input num" inputmode="numeric" placeholder="0"></div>
+      </div>
+      <div class="mini" id="adjustPending"></div>
     </div>
     <div class="mini">통장 앱이나 지갑에 있는 실제 금액을 적어주세요. 내역에는 기록되지 않고 잔액만 바뀌어요.</div>
     <div class="actions"><button class="primary" id="adjustSave">이 금액으로 맞추기</button></div>
